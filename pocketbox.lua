@@ -51,7 +51,7 @@ function display()
 	while true do
 		term.clear()
 		term.setCursorPos(1,1)
-		term.write("pocketbox v1")
+		term.write("pocketbox v2")
 		term.setCursorPos(1,4)
 		term.write("Now playing:")
 		if current then
