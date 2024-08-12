@@ -15,6 +15,12 @@ local function getFrames(first,last,dat)
 	end
 	return a 
 end
+local function addFrames(new,old)
+	for _,v in pairs(new) do
+		table.insert(old,v)
+	end
+	sleep()
+end
 function music()
     while true do
         for _,v in pairs(playlist) do
@@ -71,9 +77,21 @@ if _G.pocketboxPreloadedMusic and #songs == #_G.pocketboxPreloadedMusic then
 else
 	print("Preloading songs...")
 	for _,v in pairs(playlist) do
-		local data = http.get(v.url, nil, true).readAll()
+		local data = http.get(v.url, nil, true)
 		if data then
-			songs[v.url] = dfpwm.make_decoder()(data)
+			term.write(v.title.."...")
+			local data1 = data.read(6000)
+			songs[v.url] = {}
+			local encoder = dfpwm.make_decoder()
+			while data1 do
+				addFrames(encoder(data1),songs[v.url])
+				data1 = data.read(6000)
+			end
+			if data and data.close then
+				pcall(data.close)
+			end
+			term.write("done")
+			print("")
 		end
 	end
 	_G.pocketboxPreloadedMusic = songs
