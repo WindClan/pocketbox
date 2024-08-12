@@ -1,5 +1,5 @@
 --Epic jukebox software (now on pocket PC!)
---Made by ScienceChannel
+--Made by Featherwhisker
 local s = peripheral.find("speaker")
 local current = ""
 local song = ""
@@ -7,13 +7,14 @@ local artist = ""
 local dfpwm = require("cc.audio.dfpwm")
 local config = require("playlist")
 local playlist = config.playlist
+local songs = {}
 function music()
     while true do
         for _,v in pairs(playlist) do
 			song = v["title"]
 			artist = v["artist"]
             current = v["url"]
-            local data = http.get(current, nil, true)
+            local data = songs[v.url]
             if data then
                 local decoder = dfpwm.make_decoder()
                 while true do
@@ -21,7 +22,6 @@ function music()
                     if not chunk then
                         break
                     end
-
                     local buffer = decoder(chunk)
                     while not s.playAudio(buffer) do
                         os.pullEvent("speaker_audio_empty")
@@ -55,4 +55,17 @@ function display()
 		sleep()
 	end
 end
+if _G.pocketboxPreloadedMusic and #songs == #_G.pocketboxPreloadedMusic then
+	songs = _G.pocketboxPreloadedMusic
+else
+	print("Preloading songs...")
+	for _,v in pairs(playlist) do
+		local data = http.get(v.url, nil, true)
+		if data then
+			songs[v.url] = data
+		end
+	end
+	_G.pocketboxPreloadedMusic = songs
+end
+
 parallel.waitForAll(music,display)
