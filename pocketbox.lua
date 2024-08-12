@@ -8,6 +8,13 @@ local dfpwm = require("cc.audio.dfpwm")
 local config = require("playlist")
 local playlist = config.playlist
 local songs = {}
+local function getFrames(first,last,dat)
+	local a = {}
+	for i=first,last do
+		table.insert(a,dat[i])
+	end
+	return a 
+end
 function music()
     while true do
         for _,v in pairs(playlist) do
@@ -17,15 +24,19 @@ function music()
             local data = songs[v.url]
             if data then
                 local decoder = dfpwm.make_decoder()
+				local last = 0
                 while true do
-                    local chunk = data.read(16 * 1024)
-                    if not chunk then
+					if last > #data then
                         break
                     end
-                    local buffer = decoder(chunk)
-                    while not s.playAudio(buffer) do
-                        os.pullEvent("speaker_audio_empty")
-                    end 
+                    local chunk = getFrames(last+1,last+48000,data)
+					if #chunk == 0 then
+						break
+					end
+					last = last + 48000
+					while not s.playAudio(chunk) do
+						os.pullEvent("speaker_audio_empty")
+					end 
                 end
                current = ""
             end
@@ -60,12 +71,12 @@ if _G.pocketboxPreloadedMusic and #songs == #_G.pocketboxPreloadedMusic then
 else
 	print("Preloading songs...")
 	for _,v in pairs(playlist) do
-		local data = http.get(v.url, nil, true)
+		local data = http.get(v.url, nil, true).readAll()
 		if data then
-			songs[v.url] = data
+			songs[v.url] = dfpwm.make_decoder()(data)
 		end
 	end
 	_G.pocketboxPreloadedMusic = songs
 end
 
-parallel.waitForAll(music,display)
+parallel.waitForAny(music,display)
