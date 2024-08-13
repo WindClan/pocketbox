@@ -1,6 +1,6 @@
 return {
-	backgroundcolor = colors.pink,
-	textcolor = colors.black,
+	backgroundcolor = colors.black,
+	textcolor = colors.lime,
 	playlist = {
 		--[[example entry
 		{
