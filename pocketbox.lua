@@ -28,7 +28,7 @@ local shouldSkip = false
 local isPaused = false
 local shuffle = settings.get("pocketbox.shuffle")
 
---Taken from speakerlib
+--Taken from speakerlib https://github.com/WindClan/speakerlib
 local function speakerFuncMono(speaker)
 	while not speaker.playAudio(buffer) do
 		os.pullEvent("speaker_audio_empty")
