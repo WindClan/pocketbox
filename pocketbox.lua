@@ -19,7 +19,6 @@ local function addFrames(new,old)
 	for _,v in pairs(new) do
 		table.insert(old,v)
 	end
-	sleep()
 end
 function music()
     while true do
@@ -78,14 +77,19 @@ else
 	print("Preloading songs...")
 	for _,v in pairs(playlist) do
 		local data = http.get(v.url, nil, true)
+		local a = 1
 		if data then
 			term.write(v.title.."...")
 			local data1 = data.read(6000)
 			songs[v.url] = {}
 			local encoder = dfpwm.make_decoder()
 			while data1 do
+				if a % 10 == 0 then
+					sleep()
+				end
 				addFrames(encoder(data1),songs[v.url])
 				data1 = data.read(6000)
+				a = a + 1
 			end
 			if data and data.close then
 				pcall(data.close)
