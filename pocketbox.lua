@@ -136,14 +136,14 @@ local function getSong()
 		return song
 	end
 end
-function music()
+local function music()
     while true do
 		local song = getSong()
 		playSong(song)
         sleep()
     end
 end
-function display()
+local function display()
 	term.setTextColor(config.textcolor)
 	term.setBackgroundColor(config.backgroundcolor)
 	term.setCursorBlink(false)
@@ -176,7 +176,7 @@ function display()
 		sleep()
 	end
 end
-function input()
+local function input()
 	while true do
 		local event, button, x, y = os.pullEvent("mouse_click")
 		if y == termY then
