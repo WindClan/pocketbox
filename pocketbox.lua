@@ -62,6 +62,15 @@ local function addFrames(new,old)
 end
 
 local function playSong(v)
+	song = v["title"]
+	artist = v["artist"]
+    current = v["url"]
+	if not current then
+		driveId = v["driveId"]
+		driveId = driveId:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=sharing","")
+		v["url"] = "https://drive.google.com/uc?export=download&id="..driveId
+		current = v["url"]
+	end
     local data = songs[v.url]
 	local isPreloaded = true
 	if not data or not data.preloaded then
@@ -70,9 +79,6 @@ local function playSong(v)
 		songs[v.url] = {}
 		data = songs[v.url]
 	end
-	song = v["title"]
-	artist = v["artist"]
-    current = v["url"]
     local decoder = dfpwm.make_decoder()
 	local speakers = getMonoFunctions()
 	local last = 0
@@ -144,6 +150,7 @@ local function music()
 		if not success then
 			term.clear()
 			term.setCursorPos(1,1)
+			print(response)
 			error("Failed to play song! "..song["artist"].." - "..song["title"],0)
 		end
         sleep()
