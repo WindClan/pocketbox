@@ -1,5 +1,5 @@
 --Epic jukebox software (now on pocket PC!)
---Made by Featherwhisker
+--Made by WindClan
 settings.define("pocketbox.shuffle",{
 	description = "Specifies whether pocketbox should shuffle",
 	default = false,
@@ -14,12 +14,55 @@ local termX,termY = term.getSize()
 local frame = window.create(term.current(), 1, 1, termX, termY)
 term.redirect(frame)
 
+local config = {
+	textcolor = "lime",
+	backgroundcolor = "black"
+}
+local playlist = {}
+
+local function getSongType(dat)
+	return dat:gmatch("%[(.*)%]")()
+end
+local function parsePlaylistFile(path)
+	if not path then
+		path = "playlist.cfg"
+	end
+	local file = fs.open(path,"r")
+	local dat = file.readLine(false)
+	local song
+	while dat do
+		local songType = getSongType(dat)
+		if songType and songType ~= "" then
+			if songType == "config" then
+				song = nil
+			else
+				song = {}
+				song.type = songType
+				song.title = "Untitled"
+				song.artist = "Unknown Artist"
+				table.insert(playlist,song)
+				print("["..songType.."]")
+			end
+		else
+			key, value = dat:gmatch("(.*):(.*)")()
+			if key and value then
+				if song then
+					song[key] = value
+				else
+					config[key] = value
+				end
+				print(key.." : "..value)
+			end
+		end
+		dat = file.readLine(false)
+	end
+	file.close()
+end
+
 local current = ""
 local song = ""
 local artist = ""
 local dfpwm = require("cc.audio.dfpwm")
-local config = require("playlist")
-local playlist = config.playlist
 if not _G.pocketbox then
 	_G.pocketbox = {}
 end
@@ -30,24 +73,6 @@ local shouldSkip = false
 local isPaused = false
 local shuffle = settings.get("pocketbox.shuffle")
 
---Taken from speakerlib https://github.com/WindClan/speakerlib
-local function speakerFuncMono(speaker)
-	while not speaker.playAudio(buffer) do
-		os.pullEvent("speaker_audio_empty")
-	end
-end
-
-local function getMonoFunctions()
-	local speakers = {}
-	for i,v in pairs(peripheral.getNames()) do
-		if peripheral.hasType(v,"speaker") then
-			table.insert(speakers,function()
-				speakerFuncMono(peripheral.wrap(v))
-			end)
-		end
-	end
-	return speakers
-end
 local function getFrames(first,last,dat)
 	local a = {}
 	for i=first,last do
@@ -62,25 +87,30 @@ local function addFrames(new,old)
 end
 
 local function playSong(v)
-	song = v["title"]
-	artist = v["artist"]
-    current = v["url"]
-	if not current then
-		driveId = v["driveId"]
-		driveId = driveId:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=sharing","")
-		v["url"] = "https://drive.google.com/uc?export=download&id="..driveId
-		current = v["url"]
+	song = v.title
+	artist = v.artist
+	songType = v.type
+    current = v.path
+	if songType == "gdrive" and not v.patched then
+		driveId = current:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=sharing","")
+		v.path = "https://drive.google.com/uc?export=download&id="..driveId
+		current = v.path
+		v.patched = true
 	end
-    local data = songs[v.url]
+    local data = songs[v.path]
 	local isPreloaded = true
 	if not data or not data.preloaded then
 		isPreloaded = false
-		data1 = http.get(v.url, nil, true)
-		songs[v.url] = {}
-		data = songs[v.url]
+		if songType == "file" then
+			data1 = fs.open(v.path,"rb")
+		else
+			data1 = http.get(v.path, nil, true)
+		end	
+		songs[v.path] = {}
+		data = songs[v.path]
 	end
     local decoder = dfpwm.make_decoder()
-	local speakers = getMonoFunctions()
+	local speakers = {peripheral.find("speaker")}
 	local last = 0
     while true do
 		if isPaused then
@@ -98,16 +128,16 @@ local function playSong(v)
 			if not newDat then
 				shouldSkip = false
 				isPaused = false
-				songs[v.url].preloaded = true
+				songs[v.path].preloaded = true
 				break
 			end
-			addFrames(decoder(newDat),songs[v.url])
+			addFrames(decoder(newDat),songs[v.path])
 		end
 		if last > #data then
 			shouldSkip = false
 			isPaused = false
 			if not isPreloaded then
-				songs[v.url].preloaded = true
+				songs[v.path].preloaded = true
 			end
             break
         end
@@ -118,7 +148,10 @@ local function playSong(v)
 			break
 		end
 		last = last + 24000
-		parallel.waitForAll(table.unpack(speakers))
+		for i,v in pairs(speakers) do
+			v.playAudio(buffer)
+		end
+		os.pullEvent("speaker_audio_empty")
     end
     current = ""
 end
@@ -157,14 +190,14 @@ local function music()
     end
 end
 local function display()
-	term.setTextColor(config.textcolor)
-	term.setBackgroundColor(config.backgroundcolor)
+	term.setTextColor(colors[config.textcolor])
+	term.setBackgroundColor(colors[config.backgroundcolor])
 	term.setCursorBlink(false)
 	while true do
 		frame.setVisible(false)
 		term.clear()
 		term.setCursorPos(1,1)
-		term.write("pocketbox v2")
+		term.write("pocketbox v3")
 		term.setCursorPos(1,4)
 		term.write("Now playing:")
 		if current then
@@ -180,8 +213,8 @@ local function display()
 		
 		term.setCursorPos(1,termY)
 		local shuffleStr = "shuffle: "..tostring(shuffle)
-		local back = colors.toBlit(config.textcolor)
-		local text = colors.toBlit(config.backgroundcolor)
+		local back = colors.toBlit(colors[config.textcolor])
+		local text = colors.toBlit(colors[config.backgroundcolor])
 		term.blit(shuffleStr..(" "):rep(termX-#shuffleStr),text:rep(termX),back:rep(termX))
 		term.setCursorPos(termX-2,termY)
 		term.blit("\16 \26",text:rep(3),back:rep(3))
@@ -210,4 +243,5 @@ local function input()
 	end
 end
 
+parsePlaylistFile()
 parallel.waitForAny(music,display,input)
