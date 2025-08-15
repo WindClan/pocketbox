@@ -14,6 +14,12 @@ local termX,termY = term.getSize()
 local frame = window.create(term.current(), 1, 1, termX, termY)
 term.redirect(frame)
 
+local dfpwm
+pcall(function()
+	dfpwm = require("cc.audio.dfpwm")
+end)
+
+
 local config = {
 	textcolor = "lime",
 	backgroundcolor = "black"
@@ -40,6 +46,9 @@ local function parsePlaylistFile(path)
 				song.type = songType
 				song.title = "Untitled"
 				song.artist = "Unknown Artist"
+				song.format = "dfpwm"
+				song.sr = "48000"
+				song.ac = "1"
 				table.insert(playlist,song)
 				print("["..songType.."]")
 			end
@@ -57,12 +66,18 @@ local function parsePlaylistFile(path)
 		dat = file.readLine(false)
 	end
 	file.close()
+	for i,v in pairs(playlist) do
+		if v.format == "cd_raw" then
+			v.format = "pcm_s16le"
+			v.sr = "44100"
+			v.ac = "2"
+		end
+	end
 end
 
 local current = ""
 local song = ""
 local artist = ""
-local dfpwm = require("cc.audio.dfpwm")
 if not _G.pocketbox then
 	_G.pocketbox = {}
 end
@@ -85,12 +100,44 @@ local function addFrames(new,old)
 		table.insert(old,v)
 	end
 end
+local function resample(originalRate,bit,samples)
+	local upperRange = (math.pow(2,bit)/2)-1
+	local lowerRange = -(math.pow(2,bit)/2)
+	local new = {}
+	local rate = 48000/originalRate
+	for i=1,#samples*rate do
+		local pos = ((i-1) / rate) + 1
+		if pos == math.floor(pos) then
+			table.insert(new,samples[pos])
+		else
+			local floored = math.floor(pos)
+			local newSample = samples[floored] + ((samples[floored+1] or samples[floored])-samples[floored]) * (pos-floored)
+			table.insert(new,newSample)
+		end
+	end
+	for i=1,#new do
+		local sample = new[i]
+		sample = sample + (math.pow(2,bit)/2)
+		sample = sample * (256/math.pow(2,bit))
+		sample = sample - 128
+		if sample > 127 then
+			sample = 127
+		elseif sample < -128 then
+			sample = -128
+		end
+		new[i] = math.floor(sample+0.5)
+	end
+	return new
+end
 
 local function playSong(v)
 	song = v.title
 	artist = v.artist
-	songType = v.type
     current = v.path
+	local songType = v.type
+	local songFormat = v.format
+	local sampleRate = tonumber(v.sr)
+	local channels = tonumber(v.ac)
 	if songType == "gdrive" and not v.patched then
 		driveId = current:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=sharing","")
 		v.path = "https://drive.google.com/uc?export=download&id="..driveId
@@ -98,6 +145,7 @@ local function playSong(v)
 		v.patched = true
 	end
     local data = songs[v.path]
+	local data1
 	local isPreloaded = true
 	if not data or not data.preloaded then
 		isPreloaded = false
@@ -109,7 +157,10 @@ local function playSong(v)
 		songs[v.path] = {}
 		data = songs[v.path]
 	end
-    local decoder = dfpwm.make_decoder()
+	local decoder
+	if songFormat == "dfpwm" then
+		decoder = dfpwm.make_decoder()
+	end
 	local speakers = {peripheral.find("speaker")}
 	local last = 0
     while true do
@@ -124,14 +175,40 @@ local function playSong(v)
 			break
 		end
 		if not isPreloaded then
-			newDat = data1.read(3000)
-			if not newDat then
-				shouldSkip = false
-				isPaused = false
-				songs[v.path].preloaded = true
-				break
+			if songFormat == "dfpwm" then
+				newDat = data1.read(3000)
+				if not newDat then
+					shouldSkip = false
+					isPaused = false
+					songs[v.path].preloaded = true
+					break
+				end
+				addFrames(decoder(newDat),songs[v.path])
+			elseif songFormat == "pcm_s16le" then
+				local sampleTable = {}
+				local readSample = 0
+				local readAnySamples = false
+				for i=1,sampleRate/2 do
+					local sample = 0
+					for i=1,channels do
+						local rawDat = data1.read(2)
+						if rawDat then
+							readAnySamples = true
+							sample = sample + string.unpack("<i2",rawDat)
+						end
+					end
+					table.insert(sampleTable,sample/channels)
+				end
+				if not readAnySamples then
+					shouldSkip = false
+					isPaused = false
+					songs[v.path].preloaded = true
+					break
+				end
+				addFrames(resample(sampleRate,16,sampleTable),songs[v.path])
+			else
+				error("Invalid format specified!")
 			end
-			addFrames(decoder(newDat),songs[v.path])
 		end
 		if last > #data then
 			shouldSkip = false
@@ -153,6 +230,9 @@ local function playSong(v)
 		end
 		os.pullEvent("speaker_audio_empty")
     end
+	if data1 then
+		pcall(data1.close)
+	end
     current = ""
 end
 local lastSong = 0
