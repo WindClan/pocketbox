@@ -53,7 +53,7 @@ local function parsePlaylistFile(path)
 				print("["..songType.."]")
 			end
 		else
-			key, value = dat:gmatch("(.*):(.*)")()
+			key, value = dat:gmatch("([a-z]*):(.*)")()
 			if key and value then
 				if song then
 					song[key] = value
@@ -139,7 +139,7 @@ local function playSong(v)
 	local sampleRate = tonumber(v.sr)
 	local channels = tonumber(v.ac)
 	if songType == "gdrive" and not v.patched then
-		driveId = current:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=sharing","")
+		driveId = current:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=","&")
 		v.path = "https://drive.google.com/uc?export=download&id="..driveId
 		current = v.path
 		v.patched = true
@@ -158,7 +158,7 @@ local function playSong(v)
 		data = songs[v.path]
 	end
 	local decoder
-	if songFormat == "dfpwm" then
+	if songFormat == "dfpwm" or songFormat == "dfpwm2" then
 		decoder = dfpwm.make_decoder()
 	end
 	local speakers = {peripheral.find("speaker")}
@@ -184,6 +184,22 @@ local function playSong(v)
 					break
 				end
 				addFrames(decoder(newDat),songs[v.path])
+			elseif songFormat == "dfpwm2" then
+				newDat = data1.read(6000)
+				if not newDat then
+					shouldSkip = false
+					isPaused = false
+					songs[v.path].preloaded = true
+					break
+				end
+				local frames1 = decoder(newDat)
+				local frames2 = {}
+				for i=1,#frames1 do
+					if i%2 == 0 then
+						frames2[i/2] = (frames1[i-1] + frames1[i]) / 2
+					end
+				end
+				addFrames(frames2,songs[v.path])
 			elseif songFormat == "pcm_s16le" then
 				local sampleTable = {}
 				local readSample = 0
@@ -264,6 +280,9 @@ local function music()
 			term.clear()
 			term.setCursorPos(1,1)
 			print(response)
+			for i,v in pairs(song) do
+				print("  "..i..": "..tostring(v))
+			end
 			error("Failed to play song! "..song["artist"].." - "..song["title"],0)
 		end
         sleep()
