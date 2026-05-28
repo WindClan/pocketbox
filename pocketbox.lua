@@ -1,5 +1,6 @@
 --Epic jukebox software (now on pocket PC!)
 --Made by WindClan
+local tinytoml = require("tinytoml")
 settings.define("pocketbox.shuffle",{
 	description = "Specifies whether pocketbox should shuffle",
 	default = false,
@@ -19,53 +20,41 @@ pcall(function()
 	dfpwm = require("cc.audio.dfpwm")
 end)
 
-
 local config = {
 	textcolor = "lime",
 	backgroundcolor = "black"
 }
 local playlist = {}
 
-local function getSongType(dat)
-	return dat:gmatch("%[(.*)%]")()
-end
+local pretty = require "cc.pretty"
+
 local function parsePlaylistFile(path)
 	if not path then
-		path = "playlist.cfg"
+		path = "playlist.toml"
 	end
-	local file = fs.open(path,"r")
-	local dat = file.readLine(false)
-	local song
-	while dat do
-		local songType = getSongType(dat)
-		if songType and songType ~= "" then
-			if songType == "config" then
-				song = nil
-			else
-				song = {}
-				song.type = songType
-				song.title = "Untitled"
-				song.artist = "Unknown Artist"
-				song.format = "dfpwm"
-				song.sr = "48000"
-				song.ac = "1"
-				table.insert(playlist,song)
-				print("["..songType.."]")
-			end
+	local cfg = tinytoml.parse(path)
+	for entryName,song in pairs(cfg) do
+		if entryName == "config" then
+			song = nil
 		else
-			key, value = dat:gmatch("(.*):(.*)")()
-			if key and value then
-				if song then
-					song[key] = value
-				else
-					config[key] = value
-				end
-				print(key.." : "..value)
+			if not song.title then
+				song.title = "Untitled"
 			end
+			if not song.artist then
+				song.artist = "Unknown Artist"
+			end
+			if not song.format then
+				song.format = "dfpwm"
+			end
+			if not song.sr then
+				song.sr = "48000"
+			end
+			if not song.ac then
+				song.ac = "1"
+			end
+			table.insert(playlist,song)
 		end
-		dat = file.readLine(false)
 	end
-	file.close()
 	for i,v in pairs(playlist) do
 		if v.format == "cd_raw" then
 			v.format = "pcm_s16le"
@@ -129,7 +118,6 @@ local function resample(originalRate,bit,samples)
 	end
 	return new
 end
-
 local function playSong(v)
 	song = v.title
 	artist = v.artist
@@ -139,7 +127,7 @@ local function playSong(v)
 	local sampleRate = tonumber(v.sr)
 	local channels = tonumber(v.ac)
 	if songType == "gdrive" and not v.patched then
-		driveId = current:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=sharing","")
+		driveId = current:gsub("https://drive%.google%.com/file/d/",""):gsub("/view",""):gsub("?usp=","&")
 		v.path = "https://drive.google.com/uc?export=download&id="..driveId
 		current = v.path
 		v.patched = true
