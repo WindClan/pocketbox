@@ -1,0 +1,28 @@
+[config]
+textcolor="lime"
+backgroundcolor="black"
+
+[Duel]
+type="file"
+path="audio.dfpwm"
+title="Duel (Versus Reprise)"
+artist="Heaven Pierce Her"
+
+[115]
+type="gdrive"
+path="https://drive.google.com/file/d/examplegoogledrivelink/view?usp=drive_link"
+title="115"
+artist="Elena Siegman, Kevin Sherwood"
+
+[findher]
+type="gdrive"
+path="https://drive.google.com/file/d/examplegoogledrivelink2/view?usp=sharing"
+format="cd_raw"
+title="find her"
+artist="toby fox"
+
+[findher_http]
+type="gdrive"
+path="https://example.com/audio.dfpwm"
+title="find her"
+artist="toby fox"
